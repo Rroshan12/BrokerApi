@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HouseBroker.Infrastructure.Persistence;
 
-/// <summary>EF Core context for MSSQL. Includes the ASP.NET Identity tables.</summary>
+/// <summary>
+/// INFRASTRUCTURE LAYER: EF Core context for MSSQL, including the ASP.NET Identity tables.
+/// Entity mapping lives in Persistence/Configurations; only repositories and Identity use this class.
+/// </summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser>(options)
 {

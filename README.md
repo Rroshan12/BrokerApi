@@ -1,22 +1,33 @@
 # House Broker API
 
-A REST API (MVP) for a house broker platform: brokers list properties, house seekers search them,
-and each listing carries an estimated broker commission visible only to its owner.
+A REST API (MVP) for a house broker platform. Brokers list properties, house seekers search them,
+and each listing carries an estimated broker commission that only its owning broker can see.
 
-**Stack:** .NET 10 · ASP.NET Core Web API · EF Core + SQL Server · ASP.NET Identity + JWT · FluentValidation · xUnit
+**Stack:** .NET 10 · ASP.NET Core Web API · EF Core + SQL Server · ASP.NET Identity + JWT ·
+FluentValidation · API versioning · output caching · xUnit + Moq + FluentAssertions
 
 ## Project structure (Clean Architecture)
 
+Dependencies point inward only: `Api → Infrastructure → Application → Domain`.
+
 ```
 src/
-  HouseBroker.Domain/          Entities and business rules (no dependencies)
-  HouseBroker.Application/     Use cases, DTOs, validation, interfaces
-  HouseBroker.Infrastructure/  EF Core/MSSQL, Identity, caching, repositories
-  HouseBroker.Api/             Controllers, JWT auth, Swagger (composition root)
+  HouseBroker.Domain/          Entities and business rules. No dependencies.
+                               PropertyListing, PropertyImage, CommissionRule (band match + rounding), Roles
+  HouseBroker.Application/     Use cases, DTOs, validators and the interfaces Infrastructure implements
+    Auth/                      Register/login, AccountType (Seeker | Broker)
+    Commission/                CommissionCalculator: picks the DB band for a price
+    Listings/                  ListingService: CRUD, ownership, commission visibility, search
+    Common/                    PagedResult, exceptions, ICurrentUserService, ICacheInvalidator
+  HouseBroker.Infrastructure/  EF Core/MSSQL, Identity, JWT issuing, repositories, migrations, seeding
+  HouseBroker.Api/             Controllers, JWT auth, versioning, ProblemDetails, output cache, Swagger
 tests/
-  HouseBroker.Application.Tests/
-  HouseBroker.Api.Tests/
+  HouseBroker.Application.Tests/   Commission engine, listing service, auth service
+  HouseBroker.Api.Tests/           Controllers (mocked services) and the exception → ProblemDetails mapping
 ```
+
+Every layer's entry file (`DependencyInjection.cs`, `Program.cs`, `BaseEntity.cs`) starts with a comment
+explaining that layer's role.
 
 ## Prerequisites
 - .NET SDK 10
@@ -25,7 +36,7 @@ tests/
 
 ## Setup
 
-1. **Configure secrets** (kept out of source control via user-secrets):
+1. **Set the secrets.** They are kept out of source control with user-secrets:
 
    ```bash
    cd src/HouseBroker.Api
@@ -33,20 +44,27 @@ tests/
    dotnet user-secrets set "Jwt:Key" "<a random secret of at least 32 characters>"
    ```
 
-2. **Create the database:**
+   Optional: `Jwt:Issuer`, `Jwt:Audience` and `Jwt:ExpiryMinutes` (default 60). In production, set the same
+   keys as environment variables (`ConnectionStrings__DefaultConnection`, `Jwt__Key`).
 
-   ```bash
-   dotnet ef migrations add InitialCreate -p src/HouseBroker.Infrastructure -s src/HouseBroker.Api -o Persistence/Migrations
-   dotnet ef database update -p src/HouseBroker.Infrastructure -s src/HouseBroker.Api
-   ```
+2. **Create the database.** Choose one:
+   - **Development (automatic):** running the app in the `Development` environment applies the migrations on
+     startup and seeds demo data (see below).
+   - **Manual:**
+     ```bash
+     dotnet ef database update -p src/HouseBroker.Infrastructure -s src/HouseBroker.Api
+     ```
 
-   This seeds the commission rules:
+   The migration creates the Identity tables, the `Broker` and `Seeker` roles, and these commission rules:
 
    | Price (INR) | Rate |
    |---|---|
    | below 50,00,000 | 2% |
-   | 50,00,000 – 1,00,00,000 (inclusive) | 1.75% |
+   | 50,00,000 to 1,00,00,000, both included | 1.75% |
    | above 1,00,00,000 | 1.5% |
+
+   The assignment doesn't say which band the exact boundaries belong to. Here, 50 lakh and exactly 1 crore
+   both get 1.75%, because "between 50,00,000 and 1 crore" reads as including both ends.
 
 3. **Run:**
 
@@ -54,6 +72,65 @@ tests/
    dotnet run --project src/HouseBroker.Api
    ```
 
-   Open `/swagger` to explore and test the API.
+   Open `/swagger`. Log in with `POST /api/v1/auth/login`, click **Authorize**, and paste the `accessToken`.
 
 4. **Test:** `dotnet test`
+
+### Demo accounts (Development only)
+
+| Email | Password | Role |
+|---|---|---|
+| `broker@demo.local` | `Demo@12345` | Broker (owns 4 demo listings) |
+| `seeker@demo.local` | `Demo@12345` | Seeker |
+
+Demo data is created only when the database has no users and the app runs in `Development`.
+
+## API (v1)
+
+| Method | Route | Access | Notes |
+|---|---|---|---|
+| POST | `/api/v1/auth/register` | anonymous | `accountType`: `Seeker` or `Broker`. Brokers must give a phone number. Returns a JWT. |
+| POST | `/api/v1/auth/login` | anonymous | Returns a JWT. Rate limited to 10/min per IP. Locks out after 5 failed attempts. |
+| GET | `/api/v1/listings` | anyone | Search. See the filters below. Output-cached. |
+| GET | `/api/v1/listings/{id}` | anyone | Details, images, description, broker contact. Output-cached for anonymous callers. |
+| GET | `/api/v1/listings/mine` | Broker | Your own listings **with commission**. |
+| POST | `/api/v1/listings` | Broker | Create. Commission calculated from the DB. `201` + `Location`. |
+| PUT | `/api/v1/listings/{id}` | owning Broker | Replace. Commission recalculated. `204`. |
+| DELETE | `/api/v1/listings/{id}` | owning Broker | `204`. |
+| GET | `/api/v1/commission/rules` | Broker | Active commission bands. |
+| GET | `/api/v1/commission/estimate?price=` | Broker | Estimate before listing. |
+| GET | `/api/v1/health` | anyone | Liveness check. |
+
+**Search filters** (all optional, combined with AND): `location` (free text matched against city, area and
+address), `city` (exact), `propertyType` (`House`, `Apartment`, `Land`, `Commercial`), `minPrice`,
+`maxPrice`, `minBedrooms`, `minBathrooms`, `features` (repeatable; the listing must have all of them),
+`sortBy` (`Newest`, `PriceAsc`, `PriceDesc`), `page`, `pageSize` (1 to 50).
+
+```
+GET /api/v1/listings?location=Kathmandu&propertyType=Apartment&minPrice=2000000&maxPrice=6000000&features=Parking&sortBy=PriceAsc
+```
+
+## Design notes
+
+- **Seekers and brokers.** At registration, the account type becomes an Identity role, which is carried in the
+  JWT `role` claim. Create, update and delete require `Broker`. Ownership is checked in `ListingService`, so a
+  broker can't change another broker's listing; doing so returns `403`.
+- **Commission engine.** `CommissionCalculator` reads the active rows of the `CommissionRules` table. Bands are
+  `[MinPrice, MaxPrice)`, and amounts are rounded to 2 decimals (midpoint away from zero). The amount and rate
+  are stored on the listing when it is created or updated. To change a rate, update the row; listings pick up
+  the new rate the next time they are saved.
+- **Commission visibility.** Commission is returned only when the caller is the owning broker: on listing
+  details, on `listings/mine`, and in the create response. For everyone else the fields are `null`, and they're
+  left out of the JSON entirely.
+- **Caching.** ASP.NET Core output caching stores search and detail responses for 60 seconds, tagged
+  `listings`. Every create, update and delete evicts that tag. The built-in policy doesn't cache requests that
+  send an `Authorization` header, so a response containing commission is never stored or served to anyone
+  else. For several instances, switch to the Redis output-cache store.
+- **Validation.** FluentValidation validators in Application, with limits that match the database columns.
+  The database also has check constraints (`Price > 0`, rooms ≥ 0) and foreign keys.
+- **Errors.** Every error is RFC 7807 ProblemDetails, built through MVC's `ProblemDetailsFactory`, so it has
+  the same shape and `traceId` as automatic model-binding errors. Mapping: validation `400`, bad login `401`,
+  not owner or wrong role `403`, missing `404`, duplicate email `409`, otherwise `500` (no internal details).
+- **Third-party use.** The version is in the URL (`api/v1`, with an `api-supported-versions` response header).
+  It uses bearer tokens, a CORS policy for browser clients, enums as strings, and Swagger with XML docs.
+- **Images.** Listings store image URLs (absolute http/https). Uploading files is out of scope for this MVP.
