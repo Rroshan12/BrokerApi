@@ -20,7 +20,7 @@ public class PropertyListing : BaseEntity
     public int Bathrooms { get; set; }
     public decimal AreaSqFt { get; set; }
 
-    /// <summary>Comma-free list of features, e.g. "Parking", "Garden".</summary>
+    /// <summary>Feature tags, e.g. "Parking", "Garden".</summary>
     public List<string> Features { get; set; } = [];
 
     /// <summary>Identity user id of the owning broker.</summary>
@@ -28,10 +28,29 @@ public class PropertyListing : BaseEntity
 
     /// <summary>
     /// Estimated commission, computed from the DB commission rules when the listing is
-    /// created or its price changes. Only shown to the owning broker.
+    /// created or updated. Only shown to the owning broker.
     /// </summary>
     public decimal CommissionAmount { get; set; }
     public decimal CommissionRatePercent { get; set; }
 
     public List<PropertyImage> Images { get; set; } = [];
+
+    /// <summary>True when the given user is the broker who owns this listing.</summary>
+    public bool IsOwnedBy(string? userId) => userId is not null && userId == BrokerId;
+
+    /// <summary>Stores the commission estimate calculated for the current price.</summary>
+    public void SetCommission(decimal ratePercent, decimal amount)
+    {
+        CommissionRatePercent = ratePercent;
+        CommissionAmount = amount;
+    }
+
+    /// <summary>Replaces the image list, keeping the given order.</summary>
+    public void ReplaceImages(IEnumerable<string> urls)
+    {
+        Images.Clear();
+        var order = 0;
+        foreach (var url in urls)
+            Images.Add(new PropertyImage { PropertyListingId = Id, Url = url, SortOrder = order++ });
+    }
 }
