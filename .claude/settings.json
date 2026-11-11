@@ -1,0 +1,56 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build*)",
+      "Bash(dotnet test*)",
+      "Bash(dotnet restore*)",
+      "Bash(dotnet run*)",
+      "Bash(dotnet new*)",
+      "Bash(dotnet sln*)",
+      "Bash(dotnet add*)",
+      "Bash(dotnet list*)",
+      "Bash(dotnet format*)",
+      "Bash(dotnet ef migrations add*)",
+      "Bash(dotnet ef migrations list*)",
+      "Bash(dotnet --info)",
+      "Bash(dotnet --list-sdks)",
+      "PowerShell(dotnet build*)",
+      "PowerShell(dotnet test*)",
+      "PowerShell(dotnet restore*)"
+    ],
+    "ask": [
+      "Bash(dotnet ef database update*)",
+      "Bash(dotnet ef database drop*)",
+      "Bash(dotnet ef migrations remove*)"
+    ],
+    "deny": [
+      "Read(**/appsettings*.json)",
+      "Edit(**/appsettings*.json)",
+      "Read(**/secrets.json)",
+      "Edit(**/secrets.json)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Read(**/*.pfx)",
+      "Read(**/launchSettings.json)",
+      "Bash(dotnet user-secrets list*)",
+      "PowerShell(dotnet user-secrets list*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "if grep -qiE 'appsettings|secrets\\.json|UserSecrets|\\.env\\b'; then echo 'Blocked by project guard rail: shell commands may not touch appsettings*.json, user secrets or .env files. Ask the user to edit them.' >&2; exit 2; fi; exit 0",
+            "statusMessage": "Checking secrets guard rail"
+          }
+        ]
+      }
+    ]
+  }
+}

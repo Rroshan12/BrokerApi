@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HouseBroker.Api/HouseBroker.Api.csproj" />
+    <Project Path="src/HouseBroker.Application/HouseBroker.Application.csproj" />
+    <Project Path="src/HouseBroker.Domain/HouseBroker.Domain.csproj" />
+    <Project Path="src/HouseBroker.Infrastructure/HouseBroker.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HouseBroker.Api.Tests/HouseBroker.Api.Tests.csproj" />
+    <Project Path="tests/HouseBroker.Application.Tests/HouseBroker.Application.Tests.csproj" />
+  </Folder>
+</Solution>
