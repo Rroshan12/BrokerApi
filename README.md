@@ -90,7 +90,7 @@ Demo data is created only when the database has no users and the app runs in `De
 | Method | Route | Access | Notes |
 |---|---|---|---|
 | POST | `/api/v1/auth/register` | anonymous | `accountType`: `Seeker` or `Broker`. Brokers must give a phone number. Returns a JWT. |
-| POST | `/api/v1/auth/login` | anonymous | Returns a JWT. Rate limited to 10/min per IP. Locks out after 5 failed attempts. |
+| POST | `/api/v1/auth/login` | anonymous | Returns a JWT. The account locks for 15 minutes after 5 failed attempts. |
 | GET | `/api/v1/listings` | anyone | Search. See the filters below. Output-cached. |
 | GET | `/api/v1/listings/{id}` | anyone | Details, images, description, broker contact. Output-cached for anonymous callers. |
 | GET | `/api/v1/listings/mine` | Broker | Your own listings **with commission**. |
@@ -122,10 +122,26 @@ GET /api/v1/listings?location=Kathmandu&propertyType=Apartment&minPrice=2000000&
 - **Commission visibility.** Commission is returned only when the caller is the owning broker: on listing
   details, on `listings/mine`, and in the create response. For everyone else the fields are `null`, and they're
   left out of the JSON entirely.
-- **Caching.** ASP.NET Core output caching stores search and detail responses for 60 seconds, tagged
-  `listings`. Every create, update and delete evicts that tag. The built-in policy doesn't cache requests that
-  send an `Authorization` header, so a response containing commission is never stored or served to anyone
-  else. For several instances, switch to the Redis output-cache store.
+- **Caching: why output cache.** Most traffic on a listing site is the same public reads repeated: search
+  pages and listing details. Output caching stores the whole HTTP response for 60 seconds, so a cache hit
+  skips the controller, the service, the database and JSON serialization. It's built into ASP.NET Core and
+  takes little code. All listing responses are tagged `listings`, and every create, update and delete evicts
+  that tag through `ICacheInvalidator`. The Application layer declares that interface without knowing how
+  caching works, and the Api layer implements it, so the dependency rule holds.
+  - **Commission stays private.** The built-in policy never caches a request that sends an `Authorization`
+    header. A broker's response containing commission is therefore never stored or served to anyone else,
+    with no extra code needed.
+  - **Trade-off.** Logged-in callers aren't cached, so they always read from the database. That's acceptable
+    for an MVP because their responses differ per user anyway.
+  - **Next step: Redis.** The store is in memory, so each instance has its own cache. For several instances
+    the plan is to switch to the Redis output-cache store (`AddStackExchangeRedisOutputCache`). Cache entries
+    and tag eviction are then shared across instances, and controllers and services don't change.
+- **Rate limiting: left to the edge.** The assignment doesn't require it, and an in-app limiter counts
+  requests in each instance's own memory. Behind a load balancer with N instances the real limit becomes
+  N times the configured one, so it gives a false sense of protection. Rate limiting and bot protection
+  belong in front of the app, in an API gateway, WAF or reverse proxy (for example Azure Front Door, AWS WAF,
+  Cloudflare or nginx), which sees every request. Inside the app, brute-force protection comes from
+  Identity's account lockout. That is stored in the database, so it works the same across instances.
 - **Validation.** FluentValidation validators in Application, with limits that match the database columns.
   The database also has check constraints (`Price > 0`, rooms ≥ 0) and foreign keys.
 - **Errors.** Every error is RFC 7807 ProblemDetails, built through MVC's `ProblemDetailsFactory`, so it has
@@ -134,3 +150,5 @@ GET /api/v1/listings?location=Kathmandu&propertyType=Apartment&minPrice=2000000&
 - **Third-party use.** The version is in the URL (`api/v1`, with an `api-supported-versions` response header).
   It uses bearer tokens, a CORS policy for browser clients, enums as strings, and Swagger with XML docs.
 - **Images.** Listings store image URLs (absolute http/https). Uploading files is out of scope for this MVP.
+- **Resilience (planned).** Polly circuit breakers for SQL Server, Redis and future outgoing HTTP calls are
+  described in [docs/resilience.md](docs/resilience.md).

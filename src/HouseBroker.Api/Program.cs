@@ -2,7 +2,6 @@
 // Wires Application + Infrastructure together; contains no business logic.
 using System.Text;
 using System.Text.Json.Serialization;
-using System.Threading.RateLimiting;
 using Asp.Versioning;
 using HouseBroker.Api;
 using HouseBroker.Api.Middleware;
@@ -86,15 +85,6 @@ builder.Services
 builder.Services.AddOutputCache(o =>
     o.AddPolicy(OutputCachePolicies.Listings, p => p.Expire(TimeSpan.FromSeconds(60)).Tag(CacheTags.Listings)));
 
-// Rate limit register/login per client IP to slow down password guessing.
-builder.Services.AddRateLimiter(o =>
-{
-    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    o.AddPolicy(RateLimitPolicies.Auth, ctx => RateLimitPartition.GetFixedWindowLimiter(
-        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
-});
-
 // Third-party browser clients authenticate with bearer tokens (no cookies), so any origin is allowed.
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
@@ -143,7 +133,6 @@ app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRateLimiter();
 app.UseOutputCache();
 app.MapControllers();
 
