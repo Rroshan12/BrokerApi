@@ -1,3 +1,4 @@
+using HouseBroker.Domain.Constants;
 using HouseBroker.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -9,6 +10,6 @@ public sealed class PropertyImageConfiguration : IEntityTypeConfiguration<Proper
     public void Configure(EntityTypeBuilder<PropertyImage> b)
     {
         b.Property(x => x.Id).ValueGeneratedNever();
-        b.Property(x => x.Url).HasMaxLength(500).IsRequired();
+        b.Property(x => x.Url).HasMaxLength(ListingConstraints.ImageUrlMaxLength).IsRequired();
     }
 }

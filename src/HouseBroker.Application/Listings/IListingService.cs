@@ -1,4 +1,4 @@
-using HouseBroker.Application.Common;
+using HouseBroker.Application.Common.Pagination;
 
 namespace HouseBroker.Application.Listings;
 
@@ -12,7 +12,7 @@ public interface IListingService
     Task<ListingDetailsDto?> GetByIdAsync(Guid id, CancellationToken ct);
 
     /// <summary>The calling broker's own listings, with commission.</summary>
-    Task<PagedResult<ListingSummaryDto>> GetMineAsync(int page, int pageSize, CancellationToken ct);
+    Task<PagedResult<ListingSummaryDto>> GetMineAsync(PageRequest paging, CancellationToken ct);
 
     /// <summary>Creates a listing owned by the calling broker and calculates its commission.</summary>
     Task<ListingDetailsDto> CreateAsync(ListingRequest request, CancellationToken ct);

@@ -2,10 +2,12 @@ using FluentAssertions;
 using FluentValidation;
 using HouseBroker.Application.Commission;
 using HouseBroker.Application.Common;
+using HouseBroker.Application.Common.Pagination;
 using HouseBroker.Application.Common.Interfaces;
 using HouseBroker.Application.Listings;
 using HouseBroker.Domain.Entities;
 using HouseBroker.Domain.Enums;
+using HouseBroker.Application.Tests.TestDoubles;
 using Moq;
 
 namespace HouseBroker.Application.Tests.Listings;
@@ -20,6 +22,7 @@ public class ListingServiceTests
     private readonly Mock<IBrokerDirectory> _brokers = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly Mock<ICacheInvalidator> _cache = new();
+    private static readonly DateTime Now = new(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc);
     private readonly ListingService _sut;
 
     public ListingServiceTests()
@@ -33,7 +36,8 @@ public class ListingServiceTests
 
         _sut = new ListingService(
             _repo.Object, _commission.Object, _brokers.Object, _currentUser.Object, _cache.Object,
-            new ListingRequestValidator(), new ListingSearchQueryValidator());
+            new FixedTimeProvider(Now),
+            new ListingRequestValidator(), new ListingSearchQueryValidator(), new PageRequestValidator());
     }
 
     private void ActAs(string? userId, string? role = Roles.Broker)
@@ -118,7 +122,7 @@ public class ListingServiceTests
 
         listing.Price.Should().Be(9_000_000m);
         listing.CommissionAmount.Should().Be(180_000m);
-        listing.UpdatedAtUtc.Should().NotBeNull();
+        listing.UpdatedAtUtc.Should().Be(Now);
         _repo.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         _cache.Verify(c => c.EvictByTagAsync(CacheTags.Listings, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -253,14 +257,53 @@ public class ListingServiceTests
     }
 
     [Fact]
-    public async Task GetMineAsync_PageSizeTooLarge_IsClampedToMax()
+    public async Task GetMineAsync_ValidPaging_PassesItToRepository()
     {
         ActAs(OwnerId);
-        _repo.Setup(r => r.GetByBrokerAsync(OwnerId, 1, 50, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new PagedResult<ListingSummaryDto>([], 1, 50, 0));
+        var paging = new PageRequest { Page = 2, PageSize = 20 };
+        _repo.Setup(r => r.GetByBrokerAsync(OwnerId, paging, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PagedResult<ListingSummaryDto>([], 2, 20, 0));
 
-        var result = await _sut.GetMineAsync(0, 500, CancellationToken.None);
+        var result = await _sut.GetMineAsync(paging, CancellationToken.None);
 
-        result.PageSize.Should().Be(50);
+        result.Page.Should().Be(2);
+        result.PageSize.Should().Be(20);
+    }
+
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(1, 0)]
+    [InlineData(1, 51)]
+    public async Task GetMineAsync_InvalidPaging_ThrowsValidationException(int page, int pageSize)
+    {
+        ActAs(OwnerId);
+
+        var act = () => _sut.GetMineAsync(new PageRequest { Page = page, PageSize = pageSize }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ValidationException>();
+        _repo.Verify(r => r.GetByBrokerAsync(It.IsAny<string>(), It.IsAny<PageRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SearchAsync_PageSizeAboveMax_ThrowsValidationException()
+    {
+        var query = new ListingSearchQuery { PageSize = PageRequest.MaxPageSize + 1 };
+
+        var act = () => _sut.SearchAsync(query, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<ValidationException>())
+            .Which.Errors.Should().Contain(e => e.PropertyName == nameof(PageRequest.PageSize));
+    }
+
+    [Fact]
+    public async Task CreateAsync_SetsCreatedAtFromClock()
+    {
+        ActAs(OwnerId);
+        PropertyListing? saved = null;
+        _repo.Setup(r => r.Add(It.IsAny<PropertyListing>())).Callback<PropertyListing>(l => saved = l);
+
+        await _sut.CreateAsync(ValidRequest(), CancellationToken.None);
+
+        saved!.CreatedAtUtc.Should().Be(Now);
     }
 }

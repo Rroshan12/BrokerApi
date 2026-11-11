@@ -2,6 +2,7 @@ using FluentValidation;
 using HouseBroker.Application.Commission;
 using HouseBroker.Application.Common;
 using HouseBroker.Application.Common.Interfaces;
+using HouseBroker.Application.Common.Pagination;
 using HouseBroker.Domain.Entities;
 using HouseBroker.Domain.Enums;
 
@@ -17,8 +18,10 @@ public sealed class ListingService(
     IBrokerDirectory brokerDirectory,
     ICurrentUserService currentUser,
     ICacheInvalidator cacheInvalidator,
+    TimeProvider time,
     IValidator<ListingRequest> listingValidator,
-    IValidator<ListingSearchQuery> searchValidator) : IListingService
+    IValidator<ListingSearchQuery> searchValidator,
+    IValidator<PageRequest> pageValidator) : IListingService
 {
     /// <inheritdoc />
     public async Task<PagedResult<ListingSummaryDto>> SearchAsync(ListingSearchQuery query, CancellationToken ct)
@@ -39,12 +42,11 @@ public sealed class ListingService(
     }
 
     /// <inheritdoc />
-    public Task<PagedResult<ListingSummaryDto>> GetMineAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<ListingSummaryDto>> GetMineAsync(PageRequest paging, CancellationToken ct)
     {
         var brokerId = RequireBroker();
-        page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, ListingSearchQueryValidator.MaxPageSize);
-        return repository.GetByBrokerAsync(brokerId, page, pageSize, ct);
+        await pageValidator.ValidateAndThrowAsync(paging, ct);
+        return await repository.GetByBrokerAsync(brokerId, paging, ct);
     }
 
     /// <inheritdoc />
@@ -53,13 +55,12 @@ public sealed class ListingService(
         var brokerId = RequireBroker();
         await listingValidator.ValidateAndThrowAsync(request, ct);
 
-        var listing = new PropertyListing { BrokerId = brokerId };
+        var listing = new PropertyListing { BrokerId = brokerId, CreatedAtUtc = UtcNow() };
         listing.Apply(request);
         await ApplyCommissionAsync(listing, ct);
 
         repository.Add(listing);
-        await repository.SaveChangesAsync(ct);
-        await cacheInvalidator.EvictByTagAsync(CacheTags.Listings, ct);
+        await SaveAndEvictAsync(ct);
 
         var broker = await brokerDirectory.GetContactAsync(brokerId, ct);
         return listing.ToDetailsDto(broker, includeCommission: true);
@@ -75,10 +76,9 @@ public sealed class ListingService(
         listing.Apply(request);
         // Always recalculate: the price may have changed, or the rates in the DB may have.
         await ApplyCommissionAsync(listing, ct);
-        listing.UpdatedAtUtc = DateTime.UtcNow;
+        listing.MarkUpdated(UtcNow());
 
-        await repository.SaveChangesAsync(ct);
-        await cacheInvalidator.EvictByTagAsync(CacheTags.Listings, ct);
+        await SaveAndEvictAsync(ct);
     }
 
     /// <inheritdoc />
@@ -88,14 +88,20 @@ public sealed class ListingService(
         var listing = await GetOwnedListingAsync(id, brokerId, ct);
 
         repository.Remove(listing);
-        await repository.SaveChangesAsync(ct);
-        await cacheInvalidator.EvictByTagAsync(CacheTags.Listings, ct);
+        await SaveAndEvictAsync(ct);
     }
 
     private async Task ApplyCommissionAsync(PropertyListing listing, CancellationToken ct)
     {
         var commission = await commissionCalculator.CalculateAsync(listing.Price, ct);
         listing.SetCommission(commission.RatePercent, commission.Amount);
+    }
+
+    /// <summary>Commits the change, then drops cached listing responses so readers see it.</summary>
+    private async Task SaveAndEvictAsync(CancellationToken ct)
+    {
+        await repository.SaveChangesAsync(ct);
+        await cacheInvalidator.EvictByTagAsync(CacheTags.Listings, ct);
     }
 
     private async Task<PropertyListing> GetOwnedListingAsync(Guid id, string brokerId, CancellationToken ct)
@@ -114,4 +120,6 @@ public sealed class ListingService(
         currentUser.UserId is { } id && currentUser.IsInRole(Roles.Broker)
             ? id
             : throw new UnauthorizedAccessException("Only brokers can manage listings.");
+
+    private DateTime UtcNow() => time.GetUtcNow().UtcDateTime;
 }

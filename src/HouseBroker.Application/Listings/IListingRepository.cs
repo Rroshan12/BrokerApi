@@ -1,4 +1,4 @@
-using HouseBroker.Application.Common;
+using HouseBroker.Application.Common.Pagination;
 using HouseBroker.Domain.Entities;
 
 namespace HouseBroker.Application.Listings;
@@ -13,7 +13,7 @@ public interface IListingRepository
     Task<PagedResult<ListingSummaryDto>> SearchAsync(ListingSearchQuery query, CancellationToken ct);
 
     /// <summary>A broker's own listings, newest first, with commission filled in.</summary>
-    Task<PagedResult<ListingSummaryDto>> GetByBrokerAsync(string brokerId, int page, int pageSize, CancellationToken ct);
+    Task<PagedResult<ListingSummaryDto>> GetByBrokerAsync(string brokerId, PageRequest paging, CancellationToken ct);
 
     void Add(PropertyListing listing);
     void Remove(PropertyListing listing);

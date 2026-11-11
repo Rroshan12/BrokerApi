@@ -1,3 +1,4 @@
+using HouseBroker.Application.Common.Pagination;
 using HouseBroker.Domain.Enums;
 
 namespace HouseBroker.Application.Listings;
@@ -12,8 +13,9 @@ public enum ListingSortBy
 
 /// <summary>
 /// Search filters, bound from the query string. Every filter is optional and they combine with AND.
+/// Paging (<c>page</c>, <c>pageSize</c>) comes from <see cref="PageRequest"/>.
 /// </summary>
-public sealed record ListingSearchQuery
+public sealed record ListingSearchQuery : PageRequest
 {
     /// <summary>Free text matched against city, area and address.</summary>
     public string? Location { get; init; }
@@ -31,8 +33,4 @@ public sealed record ListingSearchQuery
     public IReadOnlyList<string>? Features { get; init; }
 
     public ListingSortBy SortBy { get; init; } = ListingSortBy.Newest;
-    public int Page { get; init; } = 1;
-
-    /// <summary>Items per page, 1 to 50.</summary>
-    public int PageSize { get; init; } = 10;
 }

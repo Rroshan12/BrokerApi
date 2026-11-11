@@ -45,6 +45,9 @@ public class PropertyListing : BaseEntity
         CommissionAmount = amount;
     }
 
+    /// <summary>Records when the listing was last changed.</summary>
+    public void MarkUpdated(DateTime utcNow) => UpdatedAtUtc = utcNow;
+
     /// <summary>Replaces the image list, keeping the given order.</summary>
     public void ReplaceImages(IEnumerable<string> urls)
     {

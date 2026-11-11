@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using HouseBroker.Api.Common;
 using HouseBroker.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,8 +8,8 @@ namespace HouseBroker.Api.Controllers;
 
 /// <summary>Sign up as a house seeker or broker, and log in to get a JWT.</summary>
 [ApiController]
-[ApiVersion(1.0)]
-[Route("api/v{version:apiVersion}/auth")]
+[ApiVersion(ApiVersions.V1)]
+[Route($"{ApiRoutes.Prefix}/auth")]
 [Produces("application/json")]
 [AllowAnonymous]
 public sealed class AuthController(IAuthService auth) : ControllerBase

@@ -18,9 +18,12 @@ src/
     Auth/                      Register/login, AccountType (Seeker | Broker)
     Commission/                CommissionCalculator: picks the DB band for a price
     Listings/                  ListingService: CRUD, ownership, commission visibility, search
-    Common/                    PagedResult, exceptions, ICurrentUserService, ICacheInvalidator
+    Common/Pagination/         PageRequest (+ validator) and PagedResult, shared by every list endpoint
+    Common/                    Exceptions, ICurrentUserService, ICacheInvalidator, cache tags
   HouseBroker.Infrastructure/  EF Core/MSSQL, Identity, JWT issuing, repositories, migrations, seeding
+                               (ToPagedResultAsync, listing filters/sorting and SQL projections)
   HouseBroker.Api/             Controllers, JWT auth, versioning, ProblemDetails, output cache, Swagger
+                               (all registered in AddPresentation; Program.cs only builds the pipeline)
 tests/
   HouseBroker.Application.Tests/   Commission engine, listing service, auth service
   HouseBroker.Api.Tests/           Controllers (mocked services) and the exception → ProblemDetails mapping
