@@ -1,29 +1,27 @@
-# House Broker API — project rules
+# House Broker API
 
-API-only MVP (no UI) for a house broker assignment: .NET 10, MSSQL, Clean Architecture.
+API-only MVP for a house broker assignment: **.NET 10 · ASP.NET Core Web API · EF Core + MSSQL · Identity + JWT · Clean Architecture**.
+No UI — Swagger is the client.
 
-## Layers and dependency rule
-- `src/HouseBroker.Domain` — entities, enums, pure business rules. References nothing.
-- `src/HouseBroker.Application` — services (use cases), DTOs, FluentValidation validators, interfaces. References Domain only.
-- `src/HouseBroker.Infrastructure` — EF Core (SQL Server), ASP.NET Identity, caching, repositories. References Application.
-- `src/HouseBroker.Api` — controllers, auth, Swagger, middleware. Composition root only; no business logic.
-- `tests/*` — xUnit + Moq + FluentAssertions.
-
-Never add a reference that points inward-to-outward (e.g. Application → Infrastructure).
-
-## Conventions
-- Routes: `api/v1/...`. Return ProblemDetails for errors (see `GlobalExceptionHandler`).
-- Money is `decimal` with `HasPrecision(18,2)`. Commission rates come from the `CommissionRules` table, never hard-coded.
-- Commission fields are only populated in responses for the broker who owns the listing.
-- Each layer's DI lives in its own `DependencyInjection.cs` (`AddApplication`, `AddInfrastructure`).
-- Add an XML/inline comment at the top of each layer's main files explaining the layer's role (assignment requirement).
+## Map
+- `src/HouseBroker.Domain` — entities, enums, business rules (no dependencies)
+- `src/HouseBroker.Application` — services, DTOs, validators, interfaces
+- `src/HouseBroker.Infrastructure` — EF Core, Identity, caching, repositories
+- `src/HouseBroker.Api` — controllers, auth, Swagger, middleware (composition root)
+- `tests/` — xUnit + Moq + FluentAssertions
 
 ## Commands
-- Build: `dotnet build`
-- Test: `dotnet test`
-- Migration: `dotnet ef migrations add <Name> -p src/HouseBroker.Infrastructure -s src/HouseBroker.Api -o Persistence/Migrations`
-- Apply migration (asks first): `dotnet ef database update -p src/HouseBroker.Infrastructure -s src/HouseBroker.Api`
+- Build: `dotnet build` · Test: `dotnet test` · Run: `dotnet run --project src/HouseBroker.Api`
+- Migrations: use the `/ef-migration` skill
 
-## Secrets guard rail
-Claude must not read or edit `appsettings*.json`, `secrets.json`, `.env*` or `launchSettings.json` (enforced in `.claude/settings.json`).
-Connection strings and the JWT key live in **user-secrets**. If a config value needs changing, tell the user the exact key and value to set.
+## Where things live
+- **Rules** (auto-loaded, some only for matching files): `.claude/rules/`
+- **Subagents**: `.claude/agents/` — `clean-arch-reviewer`, `dotnet-test-writer`, `security-reviewer`
+- **Skills**: `.claude/skills/` — `/dotnet-feature`, `/ef-migration`, `/pre-commit-check`
+
+## Non-negotiables
+1. Dependency rule: Domain ← Application ← Infrastructure ← Api. Never point outward.
+2. Commission rates come from the `CommissionRules` table; commission is visible only to the owning broker.
+3. Never read or edit `appsettings.*.json`, user secrets, `.env*`. Ask the user to change config.
+4. Commits and PRs carry **no Claude / AI attribution** (no Co-Authored-By, no "Generated with").
+5. `dotnet build` and `dotnet test` must pass before saying a task is done.
