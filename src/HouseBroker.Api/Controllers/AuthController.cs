@@ -2,7 +2,6 @@ using Asp.Versioning;
 using HouseBroker.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace HouseBroker.Api.Controllers;
 
@@ -12,7 +11,6 @@ namespace HouseBroker.Api.Controllers;
 [Route("api/v{version:apiVersion}/auth")]
 [Produces("application/json")]
 [AllowAnonymous]
-[EnableRateLimiting(RateLimitPolicies.Auth)]
 public sealed class AuthController(IAuthService auth) : ControllerBase
 {
     /// <summary>Create an account. <c>accountType</c> is <c>Seeker</c> or <c>Broker</c>.</summary>
@@ -20,7 +18,6 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     [ProducesResponseType<AuthResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<AuthResponse>> RegisterAsync(RegisterRequest request, CancellationToken ct) =>
         Ok(await auth.RegisterAsync(request, ct));
 
@@ -29,7 +26,6 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     [ProducesResponseType<AuthResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<AuthResponse>> LoginAsync(LoginRequest request, CancellationToken ct) =>
         Ok(await auth.LoginAsync(request, ct));
 }
