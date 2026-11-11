@@ -1,6 +1,6 @@
 using FluentAssertions;
 using HouseBroker.Api.Controllers;
-using HouseBroker.Application.Common;
+using HouseBroker.Application.Common.Pagination;
 using HouseBroker.Application.Listings;
 using HouseBroker.Domain.Enums;
 using Microsoft.AspNetCore.Http;
@@ -101,10 +101,11 @@ public class ListingsControllerTests
     [Fact]
     public async Task GetMineAsync_ReturnsOk()
     {
-        _service.Setup(s => s.GetMineAsync(1, 10, It.IsAny<CancellationToken>()))
+        var paging = new PageRequest();
+        _service.Setup(s => s.GetMineAsync(paging, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResult<ListingSummaryDto>([], 1, 10, 0));
 
-        var result = await _sut.GetMineAsync(CancellationToken.None);
+        var result = await _sut.GetMineAsync(paging, CancellationToken.None);
 
         result.Result.Should().BeOfType<OkObjectResult>();
     }

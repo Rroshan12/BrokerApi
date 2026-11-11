@@ -38,7 +38,6 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>();
 
         services.AddOptions<JwtOptions>().Bind(config.GetSection(JwtOptions.SectionName));
-        services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
         services.AddScoped<IdentityService>();

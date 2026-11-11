@@ -1,3 +1,4 @@
+using HouseBroker.Domain.Constants;
 using HouseBroker.Domain.Entities;
 using HouseBroker.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,14 +13,14 @@ public sealed class PropertyListingConfiguration : IEntityTypeConfiguration<Prop
     {
         // Ids are created in code (BaseEntity), so EF must treat new children as inserts.
         b.Property(x => x.Id).ValueGeneratedNever();
-        b.Property(x => x.Title).HasMaxLength(200).IsRequired();
-        b.Property(x => x.Description).HasMaxLength(4000);
-        b.Property(x => x.City).HasMaxLength(100).IsRequired();
-        b.Property(x => x.Area).HasMaxLength(100);
-        b.Property(x => x.Address).HasMaxLength(300);
-        b.Property(x => x.Price).HasPrecision(18, 2);
-        b.Property(x => x.AreaSqFt).HasPrecision(18, 2);
-        b.Property(x => x.CommissionAmount).HasPrecision(18, 2);
+        b.Property(x => x.Title).HasMaxLength(ListingConstraints.TitleMaxLength).IsRequired();
+        b.Property(x => x.Description).HasMaxLength(ListingConstraints.DescriptionMaxLength);
+        b.Property(x => x.City).HasMaxLength(ListingConstraints.CityMaxLength).IsRequired();
+        b.Property(x => x.Area).HasMaxLength(ListingConstraints.AreaMaxLength);
+        b.Property(x => x.Address).HasMaxLength(ListingConstraints.AddressMaxLength);
+        b.Property(x => x.Price).HasPrecision(ListingConstraints.MoneyPrecision, ListingConstraints.MoneyScale);
+        b.Property(x => x.AreaSqFt).HasPrecision(ListingConstraints.MoneyPrecision, ListingConstraints.MoneyScale);
+        b.Property(x => x.CommissionAmount).HasPrecision(ListingConstraints.MoneyPrecision, ListingConstraints.MoneyScale);
         b.Property(x => x.CommissionRatePercent).HasPrecision(5, 3);
         b.PrimitiveCollection(x => x.Features);
         b.Property(x => x.BrokerId).IsRequired();
